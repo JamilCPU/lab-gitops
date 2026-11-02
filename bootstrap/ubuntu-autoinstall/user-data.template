@@ -1,0 +1,39 @@
+#cloud-config
+autoinstall:
+  version: 1
+  interactive-sections: []
+  early-commands:
+    - mkdir -p /home/installer/.ssh && echo '${SSH_PUBKEY}' > /home/installer/.ssh/authorized_keys && chown -R installer /home/installer/.ssh && chmod 700 /home/installer/.ssh && chmod 600 /home/installer/.ssh/authorized_keys || true
+  locale: en_US.UTF-8
+  keyboard: {layout: us}
+  timezone: America/Chicago
+  source: {id: ubuntu-server}
+  network:
+    version: 2
+    ethernets:
+      lan:
+        match: {macaddress: "${NIC_MAC}"}
+        dhcp4: false
+        addresses: [${NODE_CIDR}]
+        routes: [{to: default, via: ${GATEWAY}}]
+        nameservers: {addresses: [${DNS1}, ${DNS2}]}
+  storage:
+    layout:
+      name: direct
+      match: {model: "${DISK_MODEL_GLOB}"}
+  identity:
+    hostname: ${HOSTNAME}
+    realname: ${ADMIN_REALNAME}
+    username: ${ADMIN_USER}
+    password: '${PASSWORD_HASH}'
+  ssh:
+    install-server: true
+    allow-pw: true
+    authorized-keys:
+      - '${SSH_PUBKEY}'
+  drivers: {install: false}
+  updates: security
+  packages: [curl, git, jq, htop, nfs-common]
+  late-commands:
+    - echo '${ADMIN_USER} ALL=(ALL) NOPASSWD:ALL' > /target/etc/sudoers.d/90-admin && chmod 440 /target/etc/sudoers.d/90-admin
+  shutdown: reboot

@@ -1,0 +1,4 @@
+user-data
+meta-data
+*.secret.*
+.env
