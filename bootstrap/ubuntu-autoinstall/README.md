@@ -42,6 +42,21 @@ boot
 ```
 `reboot` instead returns to Windows, because the one-time boot entry has already been consumed.
 
+## What actually happened on the first real run (read this first)
+- **Windows device encryption silently BitLocker-encrypted the new `CIDATA` partition.** BitLocker is on for `C:` and auto-encrypts new fixed volumes. GRUB saw it as "unknown filesystem", the label/file searches failed, and the installer never found `user-data`, so it ran interactively.
+  Fix: after formatting, run `manage-bde -off X:` (and wait for `manage-bde -status X:` to say *Fully Decrypted*). Or skip the separate partition and put everything on the ESP.
+- **The approach that worked**: copy `casper/vmlinuz` and `casper/initrd` out of the ISO into `\EFI\ubuntu\` on the ESP (FAT, always readable; needs about 95 MB free).
+  Also put `.disk\info` and `boot\grub\grub.cfg` on the ESP. That `grub.cfg` loads `($root)/EFI/ubuntu/vmlinuz iso-scan/filename=/ubuntu.iso autoinstall ---`, and casper then finds the ISO on any partition Linux can read.
+- Manual fallback at `grub>` for this layout:
+  ```
+  search --no-floppy --set=root --file /EFI/ubuntu/vmlinuz
+  linux /EFI/ubuntu/vmlinuz iso-scan/filename=/ubuntu.iso autoinstall ---
+  initrd /EFI/ubuntu/initrd
+  boot
+  ```
+- Rebooting at the end can hang on `I/O error, dev loop0` (it can't unmount the looped ISO). That hang is harmless: press reset. The new install has its own firmware entry (`ubuntu` on the target disk).
+- With the interactive installer, **untick LVM** or `/` gets only 100 GB. To recover afterwards: `sudo lvextend -r -l +100%FREE /dev/ubuntu-vg/ubuntu-lv`.
+
 ## Gotchas
 - `Format-Volume` wants `-Force`, not `-Confirm:$false`, when called through ssh/cmd quoting.
 - `early-commands` adds your key for the live `installer` user, so you can `ssh installer@<ip>` while it runs.
