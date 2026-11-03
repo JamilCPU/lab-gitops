@@ -8,8 +8,11 @@ The Linux worker/control-plane node was built this way.
 2. Shrinks a data partition and creates a ~6 GB **FAT32 partition labelled `CIDATA`**. It holds:
    - `ubuntu.iso`. FAT32's limit is 4 GiB, and the 24.04.5 ISO is 4.08 GB, so it fits.
    - `user-data` and `meta-data`. The installer finds these through cloud-init NoCloud, which looks for the `CIDATA` label.
-3. Copies the ISO's signed `bootx64.efi` (shim), `grubx64.efi` and `mmx64.efi` into the EFI System Partition as `\EFI\ubuntu\shimx64.efi` etc., plus `grub.cfg` from this folder.
-   - The signed grub's built-in prefix is `/EFI/ubuntu`, so it reads that `grub.cfg`. That config loopback-mounts the ISO from `CIDATA` and boots casper with `iso-scan/filename=… autoinstall`.
+3. Copies the ISO's signed `bootx64.efi` (shim), `grubx64.efi` and `mmx64.efi` into the EFI System Partition as `\EFI\ubuntu\shimx64.efi` etc.
+   - **Also put `.disk/info` (any text) and `boot/grub/grub.cfg` (this folder's `grub.cfg`) on the `CIDATA` partition.**
+   - The ISO's `grubx64.efi` is the *CD* build (`gcdx64.efi`). Its embedded config runs `search --file /.disk/info` and then loads `($root)/boot/grub/grub.cfg`; it never reads `\EFI\ubuntu\grub.cfg`.
+   - Without those two files it drops to a bare `grub>` prompt. That happened on the first run, and the manual fix is below.
+   - `grub.cfg` loopback-mounts the ISO from `CIDATA` and boots casper with `iso-scan/filename=… autoinstall`.
    - Secure Boot can stay on.
 4. `bcdedit /copy {bootmgr} /d "Ubuntu Installer"`, then `bcdedit /set {new} path \EFI\ubuntu\shimx64.efi`, then `bcdedit /set {fwbootmgr} bootsequence {new}`.
    This is a **one-time** boot: if it fails, the firmware falls back to Windows.
@@ -28,6 +31,16 @@ export HOSTNAME=… NODE_CIDR=… GATEWAY=… DNS1=… DNS2=… NIC_MAC=… DISK
 envsubst < user-data.template > user-data
 envsubst < meta-data.template > meta-data
 ```
+
+## Manual rescue from a bare `grub>` prompt
+```
+search --no-floppy --set=root --label CIDATA
+loopback loop /ubuntu.iso
+linux (loop)/casper/vmlinuz iso-scan/filename=/ubuntu.iso autoinstall ---
+initrd (loop)/casper/initrd
+boot
+```
+`reboot` instead returns to Windows, because the one-time boot entry has already been consumed.
 
 ## Gotchas
 - `Format-Volume` wants `-Force`, not `-Confirm:$false`, when called through ssh/cmd quoting.
