@@ -10,4 +10,4 @@ resources:
   - usage-web.yaml
 images:
   - name: registry.lab/lab/usage-web
-    newTag: a759eea
+    newTag: 1131e7d
