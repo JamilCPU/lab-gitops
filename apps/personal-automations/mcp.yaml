@@ -1,0 +1,68 @@
+# Personal Automations MCP server over streamable HTTP (:7702, TLS with the hub's cert).
+# Tokens come from the out-of-band Secret `pa-mcp` (PA_HUB_TOKEN = the hub's mcp-http client,
+# PA_MCP_HTTP_TOKEN = bearer token remote MCP clients send).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pa-mcp
+  labels: {app: pa-mcp}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: pa-mcp}
+  template:
+    metadata:
+      labels: {app: pa-mcp}
+    spec:
+      nodeSelector:
+        role: primary-worker
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: mcp
+          image: registry.lab/lab/personal-automations-hub:latest
+          imagePullPolicy: Always
+          command: [sh, -c, 'exec pa-mcp --http --host "$NODE_IP" --port 7702']
+          env:
+            - name: NODE_IP
+              valueFrom: {fieldRef: {fieldPath: status.hostIP}}
+            - {name: PA_HUB_CERT, value: /data/personal-automations/hub/cert.pem}
+            - {name: PA_MCP_TLS_CERT, value: /data/personal-automations/hub/cert.pem}
+            - {name: PA_MCP_TLS_KEY, value: /data/personal-automations/hub/key.pem}
+            - name: PA_HUB_URL
+              value: https://$(NODE_IP):7700
+          envFrom:
+            - secretRef: {name: pa-mcp}
+          ports:
+            - {name: mcp, containerPort: 7702}
+          readinessProbe:
+            tcpSocket: {port: 7702}
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: {port: 7702}
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests: {cpu: 20m, memory: 64Mi}
+            limits: {memory: 384Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: data, mountPath: /data, readOnly: true}
+      volumes:
+        - name: data
+          hostPath: {path: /data/lab/personal-automations, type: Directory}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pa-mcp
+spec:
+  selector: {app: pa-mcp}
+  ports:
+    - {name: mcp, port: 7702, targetPort: 7702}
