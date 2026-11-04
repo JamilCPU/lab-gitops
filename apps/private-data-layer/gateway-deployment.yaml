@@ -1,0 +1,74 @@
+# MCP gateway: OAuth 2.1 server + scope-filtering proxy. State (SQLite token store, JSONL audit
+# log) lives on the primary worker's data disk, so the pod is pinned there with the role label
+# every stateful lab app uses, never by node name.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  labels: {app: gateway}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}   # SQLite: never two gateways at once
+  selector:
+    matchLabels: {app: gateway}
+  template:
+    metadata:
+      labels: {app: gateway}
+    spec:
+      nodeSelector:
+        role: primary-worker
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      initContainers:
+        # hostPath directories are created root-owned; hand them to the gateway's uid once.
+        - name: own-data
+          image: busybox:1.37
+          command: [sh, -c, "chown -R 10001:10001 /data"]
+          securityContext:
+            runAsUser: 0
+            runAsNonRoot: false
+          volumeMounts:
+            - {name: data, mountPath: /data}
+      containers:
+        - name: gateway
+          image: registry.lab/jamil/pdl-gateway:latest
+          imagePullPolicy: Always
+          ports:
+            - {name: http, containerPort: 8787}
+          env:
+            # Only the backend credentials become env vars; the Secret's secrets.yaml key is a file.
+            - name: HOMESTUDIO_MCP_SECRET
+              valueFrom: {secretKeyRef: {name: gateway-secrets, key: HOMESTUDIO_MCP_SECRET}}
+            - name: AUTOMATIONS_MCP_TOKEN
+              valueFrom: {secretKeyRef: {name: gateway-secrets, key: AUTOMATIONS_MCP_TOKEN, optional: true}}
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: config, mountPath: /etc/pdl/gateway.yaml, subPath: gateway.yaml, readOnly: true}
+            - {name: secrets, mountPath: /etc/pdl/secrets.yaml, subPath: secrets.yaml, readOnly: true}
+            - {name: data, mountPath: /data}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: config
+          configMap: {name: gateway-config}
+        - name: secrets
+          secret: {secretName: gateway-secrets, defaultMode: 0440, items: [{key: secrets.yaml, path: secrets.yaml}]}
+        - name: data
+          hostPath: {path: /data/lab/private-data-layer, type: DirectoryOrCreate}
+        - name: tmp
+          emptyDir: {}

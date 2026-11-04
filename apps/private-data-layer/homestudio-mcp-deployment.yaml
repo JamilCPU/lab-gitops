@@ -1,0 +1,49 @@
+# Read-only MCP server over the Home Studio REST API (JamilCPU/home-studio-server, mcp/).
+# It runs in the cluster, not on the Pi that hosts the audio stack, and is reachable only from
+# the gateway (ClusterIP + NetworkPolicy + shared-secret header). HOMESTUDIO_API_URL comes from
+# the out-of-band ConfigMap `homestudio-mcp-config` so no host address is committed here.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: homestudio-mcp
+  labels: {app: homestudio-mcp}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: homestudio-mcp}
+  template:
+    metadata:
+      labels: {app: homestudio-mcp}
+    spec:
+      nodeSelector:
+        role: primary-worker   # amd64 image
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: homestudio-mcp
+          image: registry.lab/jamil/homestudio-mcp:latest
+          imagePullPolicy: Always
+          ports:
+            - {name: http, containerPort: 8000}
+          envFrom:
+            - configMapRef: {name: homestudio-mcp-config}
+          env:
+            - name: HOMESTUDIO_MCP_SHARED_SECRET
+              valueFrom: {secretKeyRef: {name: gateway-secrets, key: HOMESTUDIO_MCP_SECRET}}
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          resources:
+            requests: {cpu: 20m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
