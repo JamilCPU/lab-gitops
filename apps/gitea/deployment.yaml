@@ -1,0 +1,57 @@
+# Gitea: git hosting + the cluster's container registry (Gitea packages).
+# Published as gitea.lab (web/git) and registry.lab (OCI registry, same backend).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitea
+  labels: {app: gitea}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}   # sqlite + hostPath: never two at once
+  selector:
+    matchLabels: {app: gitea}
+  template:
+    metadata:
+      labels: {app: gitea}
+    spec:
+      nodeSelector:
+        role: primary-worker
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: gitea
+          image: gitea/gitea:1.22-rootless
+          env:
+            - {name: GITEA__database__DB_TYPE, value: sqlite3}
+            - {name: GITEA__database__PATH, value: /var/lib/gitea/data/gitea.db}
+            - {name: GITEA__server__DOMAIN, value: gitea.lab}
+            - {name: GITEA__server__SSH_DOMAIN, value: gitea.lab}
+            - {name: GITEA__server__ROOT_URL, value: "http://gitea.lab/"}
+            - {name: GITEA__server__HTTP_PORT, value: "3000"}
+            - {name: GITEA__server__SSH_PORT, value: "2222"}
+            - {name: GITEA__server__SSH_LISTEN_PORT, value: "2222"}
+            - {name: GITEA__packages__ENABLED, value: "true"}
+            - {name: GITEA__security__INSTALL_LOCK, value: "true"}
+          ports:
+            - {name: http, containerPort: 3000}
+            - {name: ssh, containerPort: 2222}
+          readinessProbe:
+            httpGet: {path: /api/healthz, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /api/healthz, port: http}
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {memory: 1Gi}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/gitea}
+            - {name: config, mountPath: /etc/gitea}
+      volumes:
+        - name: data
+          hostPath: {path: /data/lab/gitea/data, type: Directory}
+        - name: config
+          hostPath: {path: /data/lab/gitea/config, type: Directory}

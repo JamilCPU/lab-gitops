@@ -1,0 +1,14 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gitea
+spec:
+  rules:
+    - host: gitea.lab
+      http:
+        paths:
+          - {path: /, pathType: Prefix, backend: {service: {name: gitea, port: {name: http}}}}
+    - host: registry.lab
+      http:
+        paths:
+          - {path: /, pathType: Prefix, backend: {service: {name: gitea, port: {name: http}}}}
