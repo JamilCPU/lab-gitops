@@ -39,11 +39,14 @@ spec:
             - {name: gateway, containerPort: 18789}
             - {name: internal, containerPort: 18791}
           readinessProbe:
-            tcpSocket: {port: 18789}
+            exec:
+              # the gateway binds 127.0.0.1 only, so probe from inside the container
+              command: [node, -e, "require('net').connect(18789,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
             initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
-            tcpSocket: {port: 18789}
+            exec:
+              command: [node, -e, "require('net').connect(18789,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))"]
             initialDelaySeconds: 60
             periodSeconds: 30
           resources:
