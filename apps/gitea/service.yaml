@@ -17,3 +17,16 @@ spec:
   selector: {app: gitea}
   ports:
     - {name: ssh, port: 2222, targetPort: ssh}
+---
+# Plain-HTTP registry port for `docker push registry.lab:5000/lab/<img>`.
+# Docker always tries https first and :443 answers (Traefik), so pushes use this port.
+# Same Gitea backend: images pushed here are pulled by the cluster as registry.lab/lab/<img>.
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitea-registry
+spec:
+  type: LoadBalancer
+  selector: {app: gitea}
+  ports:
+    - {name: registry, port: 5000, targetPort: http}
