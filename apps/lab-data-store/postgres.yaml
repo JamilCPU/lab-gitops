@@ -36,10 +36,12 @@ spec:
         fsGroup: 70
         seccompProfile: {type: RuntimeDefault}
       initContainers:
-        # hostPath directories are created root-owned; hand the data directory to the postgres uid (70) once.
+        # hostPath directories are created root-owned; hand the mount point to the postgres uid (70). Not recursive:
+        # after first start pgdata is 0700 uid 70, which root without DAC_OVERRIDE cannot traverse, and the
+        # entrypoint creates pgdata itself.
         - name: own-data
           image: busybox:1.37
-          command: [sh, -c, "chown -R 70:70 /var/lib/postgresql/data"]
+          command: [sh, -c, "chown 70:70 /var/lib/postgresql/data"]
           securityContext:
             runAsUser: 0
             runAsNonRoot: false
