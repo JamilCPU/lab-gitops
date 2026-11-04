@@ -1,0 +1,59 @@
+# Personal Automations hub (JamilCPU/personal-automations, root Dockerfile).
+# Host networking: it binds the node's LAN address :7700 with its own pinned TLS cert,
+# so the paired Pixel app and stdio MCP clients keep working unchanged.
+# State (hub.toml, hub.secrets.toml, history.db, certs, agent tokens) lives on the node's data disk.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pa-hub
+  labels: {app: pa-hub}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: pa-hub}
+  template:
+    metadata:
+      labels: {app: pa-hub}
+    spec:
+      nodeSelector:
+        role: primary-worker
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: hub
+          image: registry.lab/lab/personal-automations-hub:latest
+          imagePullPolicy: Always
+          command: [pa-hub, serve]
+          ports:
+            - {name: https, containerPort: 7700}
+          readinessProbe:
+            tcpSocket: {port: 7700}
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: {port: 7700}
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+      volumes:
+        - name: data
+          hostPath: {path: /data/lab/personal-automations, type: Directory}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pa-hub
+spec:
+  selector: {app: pa-hub}
+  ports:
+    - {name: https, port: 7700, targetPort: 7700}
