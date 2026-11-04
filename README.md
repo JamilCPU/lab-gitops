@@ -15,6 +15,7 @@ Flux runs in the cluster and watches this repo. When a change lands on `main`, F
 - **No secrets, IPs or hostnames in committed files.** Secrets are created out of band (`kubectl create secret …`) or sealed. Node-specific values come from labels (`role=primary-worker`) or ConfigMaps created at bootstrap.
 - Every workload has readiness probes.
 - Workloads that need the big node's disk use `nodeSelector` and a PersistentVolume under its data mount.
+- **Hardware-bound workloads are pinned with `nodeSelector` on a hardware label, never by node name.** Home Studio needs the USB Bluetooth dongle that drives the Echo speaker, so it uses `nodeSelector: {hardware/bluetooth-usb: "true"}` and runs only on the node carrying that label (set at agent join, see `bootstrap/k3s/agent-join.sh`). Never schedule it anywhere else.
 - Apps are published through Traefik Ingress as `<name>.lab`. `infrastructure/lab-dns` (CoreDNS on the node(s) labelled `lab-dns=true`) resolves `*.lab` to the ingress node and forwards everything else to the router. The router hands those nodes out as DNS via DHCP.
 
 ## Day-to-day
