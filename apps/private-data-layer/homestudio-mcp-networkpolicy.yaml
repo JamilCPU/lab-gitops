@@ -1,0 +1,15 @@
+# Only gateway pods may talk to homestudio-mcp (second layer beside the shared-secret header).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: homestudio-mcp-from-gateway
+spec:
+  podSelector:
+    matchLabels: {app: homestudio-mcp}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: {app: gateway}
+      ports:
+        - {protocol: TCP, port: 8000}
