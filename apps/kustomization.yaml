@@ -4,3 +4,4 @@ resources:
   - namespace.yaml
   - gitea
   - ai-news
+  - pi-agents

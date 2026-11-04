@@ -1,0 +1,75 @@
+# Mission Control (OpenClaw dashboard) on every Pi (arm64), carried over from the old Pi cluster.
+# OC_TOKEN comes from the out-of-band Secret `mission-control` (never committed).
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: mission-control
+  labels: {app: mission-control}
+spec:
+  selector:
+    matchLabels: {app: mission-control}
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 1}
+  template:
+    metadata:
+      labels: {app: mission-control}
+    spec:
+      nodeSelector:
+        kubernetes.io/arch: arm64
+      containers:
+        - name: mission-control
+          image: registry.lab/lab/mission-control:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - {name: PORT, value: "8095"}
+            - {name: LOCAL_MODE, value: "true"}
+            - {name: NODE_ENV, value: production}
+            - {name: OC_INTERNAL_PORT, value: "18791"}
+            - {name: OPENCLAW_HOME, value: /openclaw-home}
+            - name: OC_TOKEN
+              valueFrom: {secretKeyRef: {name: mission-control, key: OC_TOKEN}}
+          ports:
+            - {name: http, containerPort: 8095, hostPort: 8095}
+          readinessProbe:
+            tcpSocket: {port: http}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: {port: http}
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          volumeMounts:
+            - {name: openclaw-home, mountPath: /openclaw-home}
+            - {name: data, mountPath: /app/data}
+            - {name: ssh-key, mountPath: /root/.ssh, readOnly: true}
+      volumes:
+        - name: openclaw-home
+          hostPath: {path: /srv/lab-home/.openclaw, type: Directory}
+        - name: data
+          hostPath: {path: /srv/lab-home/mission-control/data, type: DirectoryOrCreate}
+        - name: ssh-key
+          hostPath: {path: /srv/lab-home/.ssh, type: Directory}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mission-control
+spec:
+  selector: {app: mission-control}
+  ports:
+    - {name: http, port: 8095, targetPort: http}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mission-control
+spec:
+  rules:
+    - host: mission.lab
+      http:
+        paths:
+          - {path: /, pathType: Prefix, backend: {service: {name: mission-control, port: {name: http}}}}
