@@ -1,0 +1,14 @@
+# ClusterIssuer every app uses for *.lab certificates. The CA key pair lives only in the
+# out-of-band Secret cert-manager/lab-ca (bootstrap/lab-tls/import-ca.sh); it is never committed.
+#
+# Request a certificate from any namespace with an Ingress annotation:
+#   cert-manager.io/cluster-issuer: lab-ca
+# plus spec.tls[].secretName, or with a Certificate resource whose issuerRef is
+#   {kind: ClusterIssuer, name: lab-ca}
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: lab-ca
+spec:
+  ca:
+    secretName: lab-ca
