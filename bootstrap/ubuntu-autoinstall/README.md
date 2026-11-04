@@ -26,7 +26,7 @@ Fill in the `${…}` placeholders in `user-data.template` and `meta-data.templat
 - `DISK_MODEL_GLOB` must match only the target disk (`lsblk -o NAME,MODEL`, or `Get-PhysicalDisk` on Windows).
 
 ```bash
-export HOSTNAME=… NODE_CIDR=… GATEWAY=… DNS1=… DNS2=… NIC_MAC=… DISK_MODEL_GLOB=… \
+export HOSTNAME=… ADMIN_USER=… ADMIN_REALNAME=… NODE_CIDR=… GATEWAY=… DNS1=… DNS2=… NIC_MAC=… DISK_MODEL_GLOB=… \
        SSH_PUBKEY="$(cat ~/.ssh/id_ed25519.pub)" PASSWORD_HASH="$(openssl passwd -6)"
 envsubst < user-data.template > user-data
 envsubst < meta-data.template > meta-data

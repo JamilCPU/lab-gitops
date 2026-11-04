@@ -2,3 +2,7 @@ user-data
 meta-data
 *.secret.*
 .env
+# Real node values never live in this repo. Copy the *.example files and fill them in locally.
+lab-network.env
+registries.yaml
+*.token

@@ -1,0 +1,10 @@
+# /etc/rancher/k3s/registries.yaml on EVERY node (mode 600, root). Gitignored when real.
+# Plain HTTP on purpose: see README "Registry".
+mirrors:
+  registry.lab:
+    endpoint: ["http://registry.lab"]
+configs:
+  registry.lab:
+    auth: {username: <gitea user>, password: <gitea token>}
+  gitea.lab:            # Gitea's token realm host
+    auth: {username: <gitea user>, password: <gitea token>}
