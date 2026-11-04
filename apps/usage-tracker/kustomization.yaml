@@ -1,0 +1,13 @@
+# Usage Tracker web viewer at usage.lab: device/date/hour filters over the `usage` schema of the Lab Data Store.
+# Source of the image: JamilCPU/usage-tracker (scripts/build-push.sh on the primary node). Bump the tag here.
+# Out-of-band prerequisite: Secret `usage-web` (scripts/register-oauth-client.sh in that repo).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: lab
+commonLabels:
+  app.kubernetes.io/part-of: usage-tracker
+resources:
+  - usage-web.yaml
+images:
+  - name: registry.lab/lab/usage-web
+    newTag: a759eea

@@ -1,0 +1,125 @@
+# Usage viewer: FastAPI API + Svelte UI reading the `usage` schema as the read-only usage_reader role.
+# Login goes through the MCP gateway (OAuth authorization code + PKCE); the OAuth client id and the cookie
+# signing key live in Secret `usage-web` (created by scripts/register-oauth-client.sh in JamilCPU/usage-tracker).
+# The `migrate` init container applies the usage schema migrations as usage_owner on every start (idempotent).
+# DNS note: inside the cluster `gateway.lab` resolves to the gateway Service (<svc>.<namespace>), which speaks
+# plain HTTP on 8787, so server-side OAuth calls connect to Traefik (OAUTH_CONNECT_HOST) with the issuer's
+# Host/SNI. Browsers get the public https://gateway.lab URL in the login redirect.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: usage-web
+  labels: {app: usage-web}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: usage-web}
+  template:
+    metadata:
+      labels: {app: usage-web}
+    spec:
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      initContainers:
+        - name: migrate
+          image: registry.lab/lab/usage-web:latest
+          imagePullPolicy: IfNotPresent
+          command: ["usage-web", "migrate"]
+          env:
+            # Order matters: $(VAR) references only expand variables defined earlier in the list.
+            - name: USAGE_OWNER_PASSWORD
+              valueFrom: {secretKeyRef: {name: lab-data-store, key: USAGE_OWNER_PASSWORD}}
+            - name: USAGE_READER_PASSWORD
+              valueFrom: {secretKeyRef: {name: lab-data-store, key: USAGE_READER_PASSWORD}}
+            - {name: USAGE_OWNER_DSN, value: "postgresql://usage_owner:$(USAGE_OWNER_PASSWORD)@postgres:5432/lab"}
+            - {name: USAGE_READER_DSN, value: "postgresql://usage_reader:$(USAGE_READER_PASSWORD)@postgres:5432/lab"}
+            - {name: MIGRATIONS_DIR, value: /app/migrations}
+            # Settings validates at construction; auth is not used by the migrate command.
+            - {name: AUTH_MODE, value: none}
+            - name: SESSION_SECRET
+              valueFrom: {secretKeyRef: {name: usage-web, key: SESSION_SECRET}}
+          resources:
+            requests: {cpu: 20m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+      containers:
+        - name: usage-web
+          image: registry.lab/lab/usage-web:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - {name: http, containerPort: 8080}
+          env:
+            - name: USAGE_READER_PASSWORD
+              valueFrom: {secretKeyRef: {name: lab-data-store, key: USAGE_READER_PASSWORD}}
+            - {name: USAGE_READER_DSN, value: "postgresql://usage_reader:$(USAGE_READER_PASSWORD)@postgres:5432/lab"}
+            - {name: USAGE_TZ, value: America/Chicago}
+            - {name: PUBLIC_URL, value: "https://usage.lab"}
+            - {name: OAUTH_ISSUER, value: "https://gateway.lab"}
+            - {name: OAUTH_CONNECT_HOST, value: traefik.kube-system.svc.cluster.local}
+            - name: OAUTH_CLIENT_ID
+              valueFrom: {secretKeyRef: {name: usage-web, key: OAUTH_CLIENT_ID}}
+            - name: SESSION_SECRET
+              valueFrom: {secretKeyRef: {name: usage-web, key: SESSION_SECRET}}
+            - {name: OAUTH_CA_FILE, value: /etc/lab-ca/lab-ca.pem}
+            - {name: AUTH_MODE, value: oauth}
+            - {name: PORT, value: "8080"}
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: lab-ca, mountPath: /etc/lab-ca, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: lab-ca
+          configMap: {name: lab-ca}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: usage-web
+  labels: {app: usage-web}
+spec:
+  selector: {app: usage-web}
+  ports:
+    - {name: http, port: 8080, targetPort: http}
+---
+# usage.lab on :443 only. Traefik terminates TLS with the certificate cert-manager issues from the lab CA
+# into Secret `usage-lab-tls`.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: usage-web
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    cert-manager.io/cluster-issuer: lab-ca
+spec:
+  tls:
+    - hosts: [usage.lab]
+      secretName: usage-lab-tls
+  rules:
+    - host: usage.lab
+      http:
+        paths:
+          - {path: /, pathType: Prefix, backend: {service: {name: usage-web, port: {name: http}}}}
