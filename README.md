@@ -21,6 +21,7 @@ GitOps source of truth for a four-node home-lab Kubernetes cluster. **Commit = d
 - **Placement is by label, never by node name.**
   - `role=primary-worker` marks the node with the big data disk, so stateful apps pin there with hostPath volumes under `/data/lab/<app>`.
   - Hardware-bound apps select a hardware label. For example, the audio app needs the USB Bluetooth dongle, so it uses `hardware/bluetooth-usb=true`.
+  - Stateless apps use a node anti-affinity on `hardware/bluetooth-usb` so the gateway/audio Pi stays free.
 - **LAN DNS (`infrastructure/lab-dns`).**
   - A CoreDNS DaemonSet runs on nodes labelled `lab-dns=true`, using host networking on each node's LAN address port 53.
   - It answers `*.lab` with the ingress node and forwards everything else to the router.
