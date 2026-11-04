@@ -34,7 +34,8 @@ spec:
                 - -c
                 - |
                   set -e
-                  umask 077
+                  # group-readable so the off-node pull can scp as a normal user; the directory is setgid with that user's group
+                  umask 027
                   d=$(date +%F-%H%M)
                   # Dump to a .partial name; a failure removes it and the job fails before any pruning.
                   trap 'rm -f "/backups/lab-$d.dump.partial"' EXIT
