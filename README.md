@@ -15,7 +15,7 @@ Flux runs in the cluster and watches this repo. When a change lands on `main`, F
 - **No secrets, IPs or hostnames in committed files.** Secrets are created out of band (`kubectl create secret …`) or sealed. Node-specific values come from labels (`role=primary-worker`) or ConfigMaps created at bootstrap.
 - Every workload has readiness probes.
 - Workloads that need the big node's disk use `nodeSelector` and a PersistentVolume under its data mount.
-- Apps are published through Traefik Ingress as `<name>.lab`. Pi-hole resolves `*.lab` to the ingress node.
+- Apps are published through Traefik Ingress as `<name>.lab`. `infrastructure/lab-dns` (CoreDNS on the node(s) labelled `lab-dns=true`) resolves `*.lab` to the ingress node and forwards everything else to the router. The router hands those nodes out as DNS via DHCP.
 
 ## Day-to-day
 ```bash

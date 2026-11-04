@@ -1,0 +1,29 @@
+# LAN DNS for the home lab.
+#  - <anything>.lab  -> the ingress node (Traefik), so every app is reachable as <name>.lab
+#  - everything else -> forwarded to the normal upstream (the router)
+# Node-specific values come from env (the out-of-band ConfigMap `lab-network`,
+# see bootstrap/k3s/lab-network-config.sh), never from this repo.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: corefile
+data:
+  Corefile: |
+    lab:53 {
+        bind {$NODE_IP}
+        template IN A {
+            answer "{{ .Name }} 60 IN A {$LAB_INGRESS_IP}"
+        }
+        template IN AAAA {
+            rcode NOERROR
+        }
+        errors
+    }
+    .:53 {
+        bind {$NODE_IP}
+        forward . {$UPSTREAM_DNS}
+        cache 300
+        errors
+        health {$NODE_IP}:8091
+        ready {$NODE_IP}:8181
+    }
