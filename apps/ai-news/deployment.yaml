@@ -1,0 +1,62 @@
+# SIGNAL AI News reader (JamilCPU/ai-news, app/). Image is multi-arch:
+#   docker buildx build --platform linux/amd64,linux/arm64 -t registry.lab:5000/lab/ai-news:latest --push app
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-news
+  labels: {app: ai-news}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: ai-news}
+  template:
+    metadata:
+      labels: {app: ai-news}
+    spec:
+      nodeSelector:
+        role: primary-worker
+      containers:
+        - name: ai-news
+          image: registry.lab/lab/ai-news:latest
+          imagePullPolicy: Always
+          env:
+            - {name: PORT, value: "3000"}
+            - {name: NODE_ENV, value: production}
+          ports:
+            - {name: http, containerPort: 3000}
+          readinessProbe:
+            httpGet: {path: /api/digests, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /, port: http}
+            initialDelaySeconds: 15
+            periodSeconds: 30
+          resources:
+            requests: {cpu: 20m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          volumeMounts:
+            - {name: digests, mountPath: /app/public/digests}
+      volumes:
+        - name: digests
+          hostPath: {path: /data/lab/ai-news/digests, type: Directory}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-news
+spec:
+  selector: {app: ai-news}
+  ports:
+    - {name: http, port: 3000, targetPort: http}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ai-news
+spec:
+  rules:
+    - host: news.lab
+      http:
+        paths:
+          - {path: /, pathType: Prefix, backend: {service: {name: ai-news, port: {name: http}}}}
