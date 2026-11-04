@@ -18,6 +18,18 @@ spec:
     metadata:
       labels: {app: ingest-api}
     spec:
+      # Floats on any node except the gateway/audio Pi (its hardware label marks it reserved); prefers the amd64 node.
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - {key: hardware/bluetooth-usb, operator: DoesNotExist}
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 50
+              preference:
+                matchExpressions:
+                  - {key: kubernetes.io/arch, operator: In, values: [amd64]}
       enableServiceLinks: false
       securityContext:
         runAsNonRoot: true
