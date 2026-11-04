@@ -1,0 +1,60 @@
+# Nightly backup at 03:00 UTC: custom-format dump of the `lab` database, the cluster's roles, and a tarball of the
+# files area, written to the primary node's second disk (/srv/lab-data-store/backups, owned by uid 70).
+# Dumps older than 14 days are pruned. A weekly off-node pull is done outside the cluster.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  labels: {app: postgres-backup}
+spec:
+  schedule: "0 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels: {app: postgres-backup}
+        spec:
+          restartPolicy: OnFailure
+          nodeSelector:
+            role: primary-worker
+          enableServiceLinks: false
+          securityContext:
+            runAsUser: 70
+            runAsGroup: 70
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: backup
+              image: timescale/timescaledb:2.17.2-pg17
+              command:
+                - sh
+                - -c
+                - >-
+                  set -e;
+                  d=$(date +%F-%H%M);
+                  pg_dump -Fc -h postgres -U postgres -d lab -f /backups/lab-$d.dump
+                  && pg_dumpall -h postgres -U postgres --globals-only > /backups/globals-$(date +%F).sql
+                  && tar czf /backups/files-$(date +%F).tgz -C /files . ;
+                  find /backups -type f -mtime +14 -delete;
+                  ls -la /backups
+              env:
+                - {name: PGHOST, value: postgres}
+                - name: PGPASSWORD
+                  valueFrom: {secretKeyRef: {name: lab-data-store, key: POSTGRES_PASSWORD}}
+              resources:
+                requests: {cpu: 50m, memory: 128Mi}
+                limits: {memory: 512Mi}
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: {drop: ["ALL"]}
+              volumeMounts:
+                - {name: backups, mountPath: /backups}
+                - {name: files, mountPath: /files, readOnly: true}
+          volumes:
+            - name: backups
+              hostPath: {path: /srv/lab-data-store/backups, type: Directory}
+            - name: files
+              hostPath: {path: /data/lab/lab-data-store/files, type: Directory}
