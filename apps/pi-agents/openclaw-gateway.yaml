@@ -1,0 +1,59 @@
+# OpenClaw gateway on every Pi (arm64), carried over unchanged from the old Pi cluster.
+# Pi1's 07:00 ai-digest cron (native, outside k3s) talks to it on localhost:18789.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: openclaw-gateway
+  labels: {app: openclaw-gateway}
+spec:
+  selector:
+    matchLabels: {app: openclaw-gateway}
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 1}
+  template:
+    metadata:
+      labels: {app: openclaw-gateway}
+    spec:
+      nodeSelector:
+        kubernetes.io/arch: arm64
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: openclaw-gateway
+          image: registry.lab/lab/openclaw-gateway:latest
+          imagePullPolicy: IfNotPresent
+          command: [node, /openclaw/dist/index.js, gateway, --port, "18789", --allow-unconfigured]
+          env:
+            - {name: HOME, value: /openclaw-home}
+            - {name: OPENCLAW_GATEWAY_PORT, value: "18789"}
+            - {name: OPENCLAW_SERVICE_MARKER, value: openclaw}
+            - {name: OPENCLAW_SERVICE_KIND, value: gateway}
+            - {name: OPENCLAW_SERVICE_VERSION, value: "2026.3.24"}
+            - {name: TMPDIR, value: /tmp}
+            - {name: OPENCLAW_HOME, value: /openclaw-home/.openclaw}
+          ports:
+            - {name: gateway, containerPort: 18789}
+            - {name: internal, containerPort: 18791}
+          readinessProbe:
+            tcpSocket: {port: 18789}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: {port: 18789}
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 512Mi}
+          volumeMounts:
+            - {name: openclaw-home, mountPath: /openclaw-home}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: openclaw-home
+          hostPath: {path: /srv/lab-home, type: Directory}
+        - name: tmp
+          emptyDir: {}
