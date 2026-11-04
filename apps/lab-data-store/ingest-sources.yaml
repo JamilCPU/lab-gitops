@@ -1,5 +1,7 @@
 # Source registry for ingest-api: which sources exist, their schemas and (for ingestable ones) the table mapping.
 # Mirrors JamilCPU/lab-data-store ingest-api/config/sources.example.yaml; docs/tenants.md there explains adding a tenant.
+# NOTE: the sources file is mounted into ingest-api with subPath, so a ConfigMap-only change does not reach the running pod:
+# run `kubectl -n lab rollout restart deploy/ingest-api` after Flux applies it.
 apiVersion: v1
 kind: ConfigMap
 metadata:
