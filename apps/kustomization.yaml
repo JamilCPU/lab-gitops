@@ -9,3 +9,4 @@ resources:
   - ai-art-factory
   - private-data-layer
   - lab-data-store
+  - usage-tracker
