@@ -48,6 +48,7 @@ GitOps source of truth for a four-node home-lab Kubernetes cluster. **Commit = d
 | Personal Automations | `automations.lab`, `mcp.automations.lab` | control-plane API and MCP server for the lab, used by an Android app and AI agents |
 | AI News | `news.lab` | daily AI-news digest reader |
 | Mission Control | `mission.lab` | dashboard for the agent gateway on each Pi |
+| Lab Data Store | `ingest.lab` (ingest API); Postgres internal | Postgres + TimescaleDB pinned to the primary node, one schema per source, nightly dump to the node's other disk |
 | OpenClaw gateway | (host network) | agent gateway DaemonSet on the Pis |
 
 ## Rules

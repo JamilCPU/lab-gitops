@@ -1,0 +1,78 @@
+# Postgres + TimescaleDB: the lab's one stateful data store. Pinned to the primary worker (role label,
+# never a node name) with its data on a hostPath. One database `lab`; one schema per source.
+# Passwords come from the out-of-band Secret `lab-data-store`.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels: {app: postgres}
+spec:
+  clusterIP: None
+  selector: {app: postgres}
+  ports:
+    - {name: postgres, port: 5432, targetPort: postgres}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  labels: {app: postgres}
+spec:
+  replicas: 1
+  serviceName: postgres
+  updateStrategy: {type: RollingUpdate}
+  selector:
+    matchLabels: {app: postgres}
+  template:
+    metadata:
+      labels: {app: postgres}
+    spec:
+      nodeSelector:
+        role: primary-worker
+      enableServiceLinks: false
+      securityContext:
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile: {type: RuntimeDefault}
+      initContainers:
+        # hostPath directories are created root-owned; hand the data directory to the postgres uid (70) once.
+        - name: own-data
+          image: busybox:1.37
+          command: [sh, -c, "chown -R 70:70 /var/lib/postgresql/data"]
+          securityContext:
+            runAsUser: 0
+            runAsNonRoot: false
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL], add: [CHOWN, FOWNER]}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+      containers:
+        - name: postgres
+          image: timescale/timescaledb:2.17.2-pg17
+          args: ["-c", "shared_buffers=512MB", "-c", "timescaledb.telemetry_level=off"]
+          ports:
+            - {name: postgres, containerPort: 5432}
+          env:
+            - {name: POSTGRES_DB, value: lab}
+            - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
+            - name: POSTGRES_PASSWORD
+              valueFrom: {secretKeyRef: {name: lab-data-store, key: POSTGRES_PASSWORD}}
+          readinessProbe:
+            exec: {command: [pg_isready, -U, postgres, -d, lab]}
+            periodSeconds: 10
+          livenessProbe:
+            exec: {command: [pg_isready, -U, postgres, -d, lab]}
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests: {cpu: 100m, memory: 512Mi}
+            limits: {memory: 2Gi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+      volumes:
+        - name: data
+          hostPath: {path: /data/lab/lab-data-store/postgres, type: Directory}
