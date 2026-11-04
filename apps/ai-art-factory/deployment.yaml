@@ -1,0 +1,78 @@
+# AI Art Factory dashboard (JamilCPU/ai-art-factory, root Dockerfile) at art.lab.
+# State (config.yaml, factory.sqlite, images/, .env, factory_settings.json) lives on the
+# primary worker's data disk. config.yaml keeps `scheduled_enabled: false`; there is no
+# scheduled batch any more (the CLI has no `batch` command), so no CronJob.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-art-factory
+  labels: {app: ai-art-factory}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}   # sqlite on a hostPath: never two writers
+  selector:
+    matchLabels: {app: ai-art-factory}
+  template:
+    metadata:
+      labels: {app: ai-art-factory}
+    spec:
+      nodeSelector:
+        role: primary-worker
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: dashboard
+          image: registry.lab/lab/ai-art-factory:latest
+          imagePullPolicy: Always
+          ports:
+            - {name: http, containerPort: 8077}
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /, port: http}
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 1Gi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+      volumes:
+        - name: data
+          hostPath: {path: /data/lab/ai-art-factory, type: Directory}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-art-factory
+spec:
+  selector: {app: ai-art-factory}
+  ports:
+    - {name: http, port: 8077, targetPort: http}
+---
+# Also on <primary node>:8077, the pre-migration address, for old bookmarks.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-art-factory-lan
+spec:
+  type: LoadBalancer
+  selector: {app: ai-art-factory}
+  ports:
+    - {name: http, port: 8077, targetPort: http}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ai-art-factory
+spec:
+  rules:
+    - host: art.lab
+      http:
+        paths:
+          - {path: /, pathType: Prefix, backend: {service: {name: ai-art-factory, port: {name: http}}}}
