@@ -6,3 +6,6 @@ meta-data
 lab-network.env
 registries.yaml
 *.token
+# Output of bootstrap/lab-tls/make-lab-tls.sh (CA key + server keys) must never be committed.
+lab-tls/
+*.key
