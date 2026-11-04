@@ -1,0 +1,109 @@
+# Ingest API: the only write path into the store. Devices POST batches with a per-device bearer token.
+# On start it applies the store migrations and provisions the per-source roles, so it needs Postgres up
+# (liveness waits 20 s; readiness is /readyz, which checks the database). One replica by design: the rate
+# limiter is in memory. Reachable at ingest.lab over TLS.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingest-api
+  labels: {app: ingest-api}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}   # in-memory rate limiter: one process only
+  selector:
+    matchLabels: {app: ingest-api}
+  template:
+    metadata:
+      labels: {app: ingest-api}
+    spec:
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: ingest-api
+          image: registry.lab/lab/ingest-api:e0f2b7d
+          imagePullPolicy: IfNotPresent
+          ports:
+            - {name: http, containerPort: 8080}
+          env:
+            # Order matters: $(VAR) references only expand variables defined earlier in the list.
+            - name: POSTGRES_PASSWORD
+              valueFrom: {secretKeyRef: {name: lab-data-store, key: POSTGRES_PASSWORD}}
+            - name: INGEST_PASSWORD
+              valueFrom: {secretKeyRef: {name: lab-data-store, key: INGEST_PASSWORD}}
+            - {name: STORE_ADMIN_DSN, value: "postgresql://postgres:$(POSTGRES_PASSWORD)@postgres:5432/lab"}
+            - {name: STORE_INGEST_DSN, value: "postgresql://ingest:$(INGEST_PASSWORD)@postgres:5432/lab"}
+            - {name: SOURCES_FILE, value: /etc/ingest-api/sources.yaml}
+            # One owner/reader password pair per source registered in ingest-sources.yaml.
+            - name: USAGE_OWNER_PASSWORD
+              valueFrom: {secretKeyRef: {name: lab-data-store, key: USAGE_OWNER_PASSWORD}}
+            - name: USAGE_READER_PASSWORD
+              valueFrom: {secretKeyRef: {name: lab-data-store, key: USAGE_READER_PASSWORD}}
+            - name: BANK_OWNER_PASSWORD
+              valueFrom: {secretKeyRef: {name: lab-data-store, key: BANK_OWNER_PASSWORD}}
+            - name: BANK_READER_PASSWORD
+              valueFrom: {secretKeyRef: {name: lab-data-store, key: BANK_READER_PASSWORD}}
+            - name: EMAIL_OWNER_PASSWORD
+              valueFrom: {secretKeyRef: {name: lab-data-store, key: EMAIL_OWNER_PASSWORD}}
+            - name: EMAIL_READER_PASSWORD
+              valueFrom: {secretKeyRef: {name: lab-data-store, key: EMAIL_READER_PASSWORD}}
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: sources, mountPath: /etc/ingest-api/sources.yaml, subPath: sources.yaml, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+            # Reserved files area: tenants put files under /files/<source>/. Backed up nightly.
+            - {name: files, mountPath: /files}
+      volumes:
+        - name: sources
+          configMap: {name: ingest-sources}
+        - name: tmp
+          emptyDir: {}
+        - name: files
+          hostPath: {path: /data/lab/lab-data-store/files, type: Directory}
+---
+# Named ingest-api, not ingest: a Service called `ingest` would shadow the ingest.lab name for pods in the namespace.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ingest-api
+  labels: {app: ingest-api}
+spec:
+  selector: {app: ingest-api}
+  ports:
+    - {name: http, port: 8080, targetPort: http}
+---
+# ingest.lab on :443 only. Traefik terminates TLS with the certificate cert-manager issues from the lab CA
+# into Secret `ingest-lab-tls`.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingest-api
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    cert-manager.io/cluster-issuer: lab-ca
+spec:
+  tls:
+    - hosts: [ingest.lab]
+      secretName: ingest-lab-tls
+  rules:
+    - host: ingest.lab
+      http:
+        paths:
+          - {path: /, pathType: Prefix, backend: {service: {name: ingest-api, port: {name: http}}}}

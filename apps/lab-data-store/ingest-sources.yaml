@@ -1,0 +1,34 @@
+# Source registry for ingest-api: which sources exist, their schemas and (for ingestable ones) the table mapping.
+# Mirrors JamilCPU/lab-data-store ingest-api/config/sources.example.yaml; docs/tenants.md there explains adding a tenant.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingest-sources
+data:
+  sources.yaml: |
+    sources:
+      usage:
+        schema: usage
+        table: events
+        columns:
+          device: text
+          ts_start: timestamptz
+          ts_end: timestamptz
+          kind: text
+          app: text
+          title: text
+          url: text
+          domain: text
+          idle: bool
+          source_bucket: text
+          source_event_id: bigint
+        required: [device, ts_start, ts_end, kind, source_bucket, source_event_id]
+        conflict_key: [device, source_bucket, source_event_id, ts_start]
+        on_conflict: update
+        enum:
+          kind: [window, web, afk]
+      # Roles-only sources: schema and roles are provisioned, ingest is refused.
+      bank:
+        schema: bank
+      email:
+        schema: email
