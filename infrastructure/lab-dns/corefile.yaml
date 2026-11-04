@@ -7,7 +7,7 @@
 # UPSTREAM_DNS must NEVER be the router that hands these nodes out as DNS via DHCP:
 # that router may use the same servers for its own lookups, so router -> lab-dns -> router
 # loops forever (this took the LAN's DNS down once). Use the router's upstream (e.g. the
-# ISP gateway) plus a public resolver, space-separated; they are tried in order.
+# ISP gateway) as UPSTREAM_DNS and a public resolver as UPSTREAM_DNS_FALLBACK, tried in order.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -26,7 +26,7 @@ data:
     }
     .:53 {
         bind {$NODE_IP}
-        forward . {$UPSTREAM_DNS} {
+        forward . {$UPSTREAM_DNS} {$UPSTREAM_DNS_FALLBACK} {
             policy sequential
             # Bound in-flight queries so a flood or loop answers REFUSED instead of
             # growing memory until the pod is OOM-killed.
