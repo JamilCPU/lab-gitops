@@ -65,6 +65,10 @@ spec:
               valueFrom: {secretKeyRef: {name: lab-data-store, key: EMAIL_OWNER_PASSWORD}}
             - name: EMAIL_READER_PASSWORD
               valueFrom: {secretKeyRef: {name: lab-data-store, key: EMAIL_READER_PASSWORD}}
+            - name: SMS_OWNER_PASSWORD
+              valueFrom: {secretKeyRef: {name: lab-data-store, key: SMS_OWNER_PASSWORD}}
+            - name: SMS_READER_PASSWORD
+              valueFrom: {secretKeyRef: {name: lab-data-store, key: SMS_READER_PASSWORD}}
           readinessProbe:
             httpGet: {path: /readyz, port: http}
             periodSeconds: 10
