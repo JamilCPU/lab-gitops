@@ -21,6 +21,6 @@ images:
   - name: registry.lab/lab/pdl-gateway
     newTag: 395260f
   - name: registry.lab/lab/pdl-assistant
-    newTag: 91b726e
+    newTag: 438a646
   - name: ghcr.io/jamilcpu/homestudio-mcp
     digest: sha256:fec0bc38f8462cbb10298c14f48511cc421aa022f0e2a47925b653ffe5d5ee71
