@@ -1,8 +1,13 @@
 # LAN DNS for the home lab.
 #  - <anything>.lab  -> the ingress node (Traefik), so every app is reachable as <name>.lab
-#  - everything else -> forwarded to the normal upstream (the router)
+#  - everything else -> forwarded upstream
 # Node-specific values come from env (the out-of-band ConfigMap `lab-network`,
 # see bootstrap/k3s/lab-network-config.sh), never from this repo.
+#
+# UPSTREAM_DNS must NEVER be the router that hands these nodes out as DNS via DHCP:
+# that router may use the same servers for its own lookups, so router -> lab-dns -> router
+# loops forever (this took the LAN's DNS down once). Use the router's upstream (e.g. the
+# ISP gateway) plus a public resolver, space-separated; they are tried in order.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -21,7 +26,13 @@ data:
     }
     .:53 {
         bind {$NODE_IP}
-        forward . {$UPSTREAM_DNS}
+        forward . {$UPSTREAM_DNS} {
+            policy sequential
+            # Bound in-flight queries so a flood or loop answers REFUSED instead of
+            # growing memory until the pod is OOM-killed.
+            max_concurrent 500
+        }
+        loop
         cache 300
         errors
         health {$NODE_IP}:8091
