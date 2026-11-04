@@ -2,6 +2,10 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: gitea
+  annotations:
+    # plain HTTP only: if registry.lab also answered on :443 with Traefik's default cert,
+    # clients would pick https and Gitea would hand out an https token realm they can't verify.
+    traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
   rules:
     - host: gitea.lab
