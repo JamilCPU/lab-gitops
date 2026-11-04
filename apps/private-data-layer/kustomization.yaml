@@ -1,0 +1,20 @@
+# Source of these manifests: JamilCPU/private-data-layer, deploy/k8s/base (keep in sync).
+# Images are built by CI (GHCR) and mirrored into the lab registry; swap newName/newTag here.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: lab
+commonLabels:
+  app.kubernetes.io/part-of: private-data-layer
+resources:
+  - gateway-configmap.yaml
+  - gateway-deployment.yaml
+  - gateway-service.yaml
+  - gateway-ingress.yaml
+  - homestudio-mcp-deployment.yaml
+  - homestudio-mcp-service.yaml
+  - homestudio-mcp-networkpolicy.yaml
+images:
+  - name: registry.lab/jamil/pdl-gateway
+    newTag: latest
+  - name: registry.lab/jamil/homestudio-mcp
+    newTag: latest
