@@ -32,13 +32,17 @@ spec:
               command:
                 - sh
                 - -c
-                - >-
-                  set -e;
-                  d=$(date +%F-%H%M);
-                  pg_dump -Fc -h postgres -U postgres -d lab -f /backups/lab-$d.dump
-                  && pg_dumpall -h postgres -U postgres --globals-only > /backups/globals-$(date +%F).sql
-                  && tar czf /backups/files-$(date +%F).tgz -C /files . ;
-                  find /backups -type f -mtime +14 -delete;
+                - |
+                  set -e
+                  umask 077
+                  d=$(date +%F-%H%M)
+                  # Dump to a .partial name; a failure removes it and the job fails before any pruning.
+                  trap 'rm -f "/backups/lab-$d.dump.partial"' EXIT
+                  pg_dump -Fc -h postgres -U postgres -d lab -f "/backups/lab-$d.dump.partial"
+                  mv "/backups/lab-$d.dump.partial" "/backups/lab-$d.dump"
+                  pg_dumpall -h postgres -U postgres --globals-only > "/backups/globals-$(date +%F).sql"
+                  tar czf "/backups/files-$(date +%F).tgz" -C /files .
+                  find /backups -type f -mtime +14 -delete
                   ls -la /backups
               env:
                 - {name: PGHOST, value: postgres}

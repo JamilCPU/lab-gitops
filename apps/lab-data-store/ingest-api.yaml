@@ -2,6 +2,8 @@
 # On start it applies the store migrations and provisions the per-source roles, so it needs Postgres up
 # (liveness waits 20 s; readiness is /readyz, which checks the database). One replica by design: the rate
 # limiter is in memory. Reachable at ingest.lab over TLS.
+# NOTE: the sources file is mounted with subPath, so a ConfigMap-only change does not reach the running pod:
+# run `kubectl -n lab rollout restart deploy/ingest-api` after Flux applies it.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
