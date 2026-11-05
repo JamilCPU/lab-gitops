@@ -47,15 +47,12 @@ spec:
             # Order matters: $(VAR) references only expand variables defined earlier in the list.
             - name: USAGE_OWNER_PASSWORD
               valueFrom: {secretKeyRef: {name: lab-data-store, key: USAGE_OWNER_PASSWORD}}
-            - name: USAGE_READER_PASSWORD
-              valueFrom: {secretKeyRef: {name: lab-data-store, key: USAGE_READER_PASSWORD}}
             - {name: USAGE_OWNER_DSN, value: "postgresql://usage_owner:$(USAGE_OWNER_PASSWORD)@postgres:5432/lab"}
-            - {name: USAGE_READER_DSN, value: "postgresql://usage_reader:$(USAGE_READER_PASSWORD)@postgres:5432/lab"}
             - {name: MIGRATIONS_DIR, value: /app/migrations}
-            # Settings validates at construction; auth is not used by the migrate command.
+            # migrate needs only the owner DSN. Settings still requires a SESSION_SECRET value but
+            # never uses it here (AUTH_MODE=none), so a fixed placeholder replaces the real secret.
             - {name: AUTH_MODE, value: none}
-            - name: SESSION_SECRET
-              valueFrom: {secretKeyRef: {name: usage-web, key: SESSION_SECRET}}
+            - {name: SESSION_SECRET, value: not-used-by-migrate-0000}
           resources:
             requests: {cpu: 20m, memory: 64Mi}
             limits: {memory: 256Mi}
