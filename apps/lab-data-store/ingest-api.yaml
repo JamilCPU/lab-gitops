@@ -1,7 +1,12 @@
 # Ingest API: the only write path into the store. Devices POST batches with a per-device bearer token.
-# On start it applies the store migrations and provisions the per-source roles, so it needs Postgres up
-# (liveness waits 20 s; readiness is /readyz, which checks the database). One replica by design: the rate
-# limiter is in memory. Reachable at ingest.lab over TLS.
+# The pod is split by privilege. The initContainer `bootstrap` (`store-admin bootstrap`) alone holds the
+# Postgres superuser DSN and every role password; it applies the store migrations and provisions the
+# per-source roles and grants, then exits. The HTTP container `ingest-api` gets only the `ingest` role's
+# password and DSN, so a compromised API process holds no admin credentials. `store-admin token ...`
+# (kubectl exec -c ingest-api) works with that same ingest DSN. If bootstrap fails the pod stays in Init
+# and Flux `wait: true` stalls the apps: check `kubectl -n lab logs deploy/ingest-api -c bootstrap`.
+# Needs Postgres up (readiness is /readyz, which checks the database; liveness waits 20 s). One replica
+# by design: the rate limiter is in memory. Reachable at ingest.lab over TLS.
 # NOTE: the sources file is mounted with subPath, so a ConfigMap-only change does not reach the running pod:
 # run `kubectl -n lab rollout restart deploy/ingest-api` after Flux applies it.
 apiVersion: apps/v1
@@ -37,12 +42,11 @@ spec:
         runAsGroup: 10001
         fsGroup: 10001
         seccompProfile: {type: RuntimeDefault}
-      containers:
-        - name: ingest-api
+      initContainers:
+        - name: bootstrap
           image: registry.lab/lab/ingest-api:e0f2b7d
           imagePullPolicy: IfNotPresent
-          ports:
-            - {name: http, containerPort: 8080}
+          command: ["store-admin", "bootstrap"]
           env:
             # Order matters: $(VAR) references only expand variables defined earlier in the list.
             - name: POSTGRES_PASSWORD
@@ -50,7 +54,6 @@ spec:
             - name: INGEST_PASSWORD
               valueFrom: {secretKeyRef: {name: lab-data-store, key: INGEST_PASSWORD}}
             - {name: STORE_ADMIN_DSN, value: "postgresql://postgres:$(POSTGRES_PASSWORD)@postgres:5432/lab"}
-            - {name: STORE_INGEST_DSN, value: "postgresql://ingest:$(INGEST_PASSWORD)@postgres:5432/lab"}
             - {name: SOURCES_FILE, value: /etc/ingest-api/sources.yaml}
             # One owner/reader password pair per source registered in ingest-sources.yaml.
             - name: USAGE_OWNER_PASSWORD
@@ -69,6 +72,28 @@ spec:
               valueFrom: {secretKeyRef: {name: lab-data-store, key: SMS_OWNER_PASSWORD}}
             - name: SMS_READER_PASSWORD
               valueFrom: {secretKeyRef: {name: lab-data-store, key: SMS_READER_PASSWORD}}
+          resources:
+            requests: {cpu: 20m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: sources, mountPath: /etc/ingest-api/sources.yaml, subPath: sources.yaml, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      containers:
+        - name: ingest-api
+          image: registry.lab/lab/ingest-api:e0f2b7d
+          imagePullPolicy: IfNotPresent
+          ports:
+            - {name: http, containerPort: 8080}
+          env:
+            # Order matters: $(VAR) references only expand variables defined earlier in the list.
+            - name: INGEST_PASSWORD
+              valueFrom: {secretKeyRef: {name: lab-data-store, key: INGEST_PASSWORD}}
+            - {name: STORE_INGEST_DSN, value: "postgresql://ingest:$(INGEST_PASSWORD)@postgres:5432/lab"}
+            - {name: SOURCES_FILE, value: /etc/ingest-api/sources.yaml}
           readinessProbe:
             httpGet: {path: /readyz, port: http}
             periodSeconds: 10
@@ -86,15 +111,11 @@ spec:
           volumeMounts:
             - {name: sources, mountPath: /etc/ingest-api/sources.yaml, subPath: sources.yaml, readOnly: true}
             - {name: tmp, mountPath: /tmp}
-            # Reserved files area: tenants put files under /files/<source>/. Backed up nightly.
-            - {name: files, mountPath: /files}
       volumes:
         - name: sources
           configMap: {name: ingest-sources}
         - name: tmp
           emptyDir: {}
-        - name: files
-          hostPath: {path: /data/lab/lab-data-store/files, type: Directory}
 ---
 # Named ingest-api, not ingest: a Service called `ingest` would shadow the ingest.lab name for pods in the namespace.
 apiVersion: v1

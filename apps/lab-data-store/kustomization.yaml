@@ -13,4 +13,4 @@ resources:
   - ingest-api.yaml
 images:
   - name: registry.lab/lab/ingest-api
-    newTag: e0f2b7d
+    newTag: ebac7d2
