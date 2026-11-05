@@ -42,7 +42,7 @@ images:
   - name: registry.lab/lab/pdl-gateway
     newTag: 395260f
   - name: registry.lab/lab/pdl-assistant
-    newTag: "0e30706"   # quoted: an all-digit-and-e sha parses as a YAML number
+    newTag: "5a73c63"
   - name: registry.lab/lab/pdl-bank-mcp
     newTag: 53cac89
   - name: registry.lab/lab/pdl-email-mcp
