@@ -1,4 +1,4 @@
-# Copy of lab-gitops apps/private-data-layer (the deployed version); keep the two in sync.
+# Source of these manifests: JamilCPU/private-data-layer deploy/k8s/base (keep in sync).
 # homestudio-mcp is pulled from GHCR by digest; pdl-gateway, pdl-assistant, pdl-bank-mcp, pdl-email-mcp, pdl-search-mcp, pdl-sms-store and pdl-sms-mcp are built on
 # the primary node into the lab registry until their GHCR packages are public. Bump tags/digests here.
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -41,16 +41,16 @@ images:
   - name: registry.lab/lab/pdl-gateway
     newTag: 395260f
   - name: registry.lab/lab/pdl-assistant
-    newTag: latest
+    newTag: 7171f6c
   - name: registry.lab/lab/pdl-bank-mcp
-    newTag: latest
+    newTag: fc1077f
   - name: registry.lab/lab/pdl-email-mcp
-    newTag: latest
+    newTag: fc1077f
   - name: registry.lab/lab/pdl-search-mcp
-    newTag: latest
+    newTag: 7171f6c
   - name: registry.lab/lab/pdl-sms-store
-    newTag: latest
+    newTag: 3bd6533
   - name: registry.lab/lab/pdl-sms-mcp
-    newTag: latest
+    newTag: 3bd6533
   - name: ghcr.io/jamilcpu/homestudio-mcp
     digest: sha256:fec0bc38f8462cbb10298c14f48511cc421aa022f0e2a47925b653ffe5d5ee71
