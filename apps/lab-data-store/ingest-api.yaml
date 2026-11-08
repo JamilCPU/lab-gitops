@@ -44,7 +44,7 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       initContainers:
         - name: bootstrap
-          image: registry.lab/lab/ingest-api:e0f2b7d
+          image: registry.lab/lab/ingest-api:b2e83c3
           imagePullPolicy: IfNotPresent
           command: ["store-admin", "bootstrap"]
           env:
@@ -84,7 +84,7 @@ spec:
             - {name: tmp, mountPath: /tmp}
       containers:
         - name: ingest-api
-          image: registry.lab/lab/ingest-api:e0f2b7d
+          image: registry.lab/lab/ingest-api:b2e83c3
           imagePullPolicy: IfNotPresent
           ports:
             - {name: http, containerPort: 8080}
