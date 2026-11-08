@@ -1,5 +1,7 @@
 # Lab TLS
 
+Current CA, rotation history and the client re-import steps: [docs/lab-ca.md](../../docs/lab-ca.md) (reissued 2026-11-07).
+
 One lab-internal CA signs every `*.lab` certificate. cert-manager holds its key pair in the
 out-of-band Secret `cert-manager/lab-ca`; the `ClusterIssuer` named `lab-ca`
 (`infrastructure-config/lab-ca`) issues from it. Nothing private is committed.
